@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CallLog } from "@/components/CallLog";
 import { MessageThread, groupMessages } from "@/components/MessageThread";
+import { RelaySetup } from "@/components/RelaySetup";
 import { SendMessage } from "@/components/SendMessage";
 import { WebhookSetup } from "@/components/WebhookSetup";
 import { StoredCall, StoredMessage } from "@/lib/store";
@@ -124,6 +125,8 @@ export function Dashboard({
         </Card>
 
         <WebhookSetup />
+
+        <RelaySetup />
 
         <Tabs defaultValue="messages">
           <TabsList>

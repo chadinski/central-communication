@@ -21,6 +21,9 @@ A local-first Next.js dashboard for a personal Twilio phone number. It receives 
    TWILIO_AUTH_TOKEN=
    TWILIO_PHONE_NUMBER=
    MY_REAL_PHONE=
+   RELAY_SECRET=
+   UPSTASH_REDIS_REST_URL=
+   UPSTASH_REDIS_REST_TOKEN=
    ```
 
 3. Start the app:
@@ -54,6 +57,35 @@ A local-first Next.js dashboard for a personal Twilio phone number. It receives 
 - `POST /api/call`: receives inbound calls, stores them in `data/calls.json`, and forwards to `MY_REAL_PHONE`.
 - `GET /api/call`: returns stored calls for the dashboard refresh button.
 - `POST /api/send`: sends outbound SMS with the Twilio SDK and stores the sent message locally.
+- `POST /api/relay/sms`: receives SMS forwarded from a real carrier SIM/eSIM phone and stores it in the same inbox.
+
+## Receiving OTP Codes
+
+Twilio Trial blocks inbound one-time passcodes before they reach this app. To receive OTPs such as Tinder codes in the dashboard, use a real carrier SIM/eSIM on a phone and forward the phone's received SMS to this app.
+
+Set a strong `RELAY_SECRET` in Vercel, then configure an Android SMS forwarding app or automation to POST to:
+
+```txt
+https://central-communication.vercel.app/api/relay/sms
+```
+
+Use this header:
+
+```txt
+x-relay-secret: your-relay-secret
+```
+
+Send JSON like:
+
+```json
+{
+  "from": "+15551234567",
+  "body": "Your Tinder code is 123456",
+  "to": "your carrier SIM number"
+}
+```
+
+The message will appear in the Messages tab after refresh. On Vercel, configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` so received messages persist across deployments and serverless restarts. Without Upstash, local development falls back to `data/messages.json`.
 
 ## Security Notes
 

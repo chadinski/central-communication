@@ -7,6 +7,7 @@ export type StoredMessage = {
   to?: string;
   body: string;
   messageSid?: string;
+  source?: "twilio" | "relay";
   direction: "inbound" | "outbound";
   timestamp: string;
 };
@@ -24,6 +25,69 @@ export type StoredCall = {
 const dataDir = path.join(process.cwd(), "data");
 const messagesPath = path.join(dataDir, "messages.json");
 const callsPath = path.join(dataDir, "calls.json");
+const messagesKey = "central-communication:messages";
+const callsKey = "central-communication:calls";
+
+function redisConfig() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    return null;
+  }
+
+  return { token, url: url.replace(/\/$/, "") };
+}
+
+async function redisCommand<T>(command: unknown[]): Promise<T> {
+  const config = redisConfig();
+  if (!config) {
+    throw new Error("Upstash Redis is not configured");
+  }
+
+  const response = await fetch(`${config.url}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify([command]),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upstash Redis request failed: ${response.status}`);
+  }
+
+  const [result] = (await response.json()) as Array<{
+    error?: string;
+    result: T;
+  }>;
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  return result.result;
+}
+
+async function readStoredList<T>(key: string, filePath: string) {
+  if (redisConfig()) {
+    const raw = await redisCommand<string | null>(["GET", key]);
+    return raw ? (JSON.parse(raw) as T[]) : [];
+  }
+
+  return readJsonFile<T[]>(filePath, []);
+}
+
+async function writeStoredList<T>(key: string, filePath: string, data: T[]) {
+  if (redisConfig()) {
+    await redisCommand<string>(["SET", key, JSON.stringify(data)]);
+    return;
+  }
+
+  await writeJsonFile(filePath, data);
+}
 
 async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
   try {
@@ -47,7 +111,10 @@ async function writeJsonFile<T>(filePath: string, data: T) {
 }
 
 export async function getMessages() {
-  const messages = await readJsonFile<StoredMessage[]>(messagesPath, []);
+  const messages = await readStoredList<StoredMessage>(
+    messagesKey,
+    messagesPath
+  );
   return messages.sort(
     (a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -55,14 +122,17 @@ export async function getMessages() {
 }
 
 export async function appendMessage(message: StoredMessage) {
-  const messages = await readJsonFile<StoredMessage[]>(messagesPath, []);
+  const messages = await readStoredList<StoredMessage>(
+    messagesKey,
+    messagesPath
+  );
   messages.push(message);
-  await writeJsonFile(messagesPath, messages);
+  await writeStoredList(messagesKey, messagesPath, messages);
   return message;
 }
 
 export async function getCalls() {
-  const calls = await readJsonFile<StoredCall[]>(callsPath, []);
+  const calls = await readStoredList<StoredCall>(callsKey, callsPath);
   return calls.sort(
     (a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -70,8 +140,8 @@ export async function getCalls() {
 }
 
 export async function appendCall(call: StoredCall) {
-  const calls = await readJsonFile<StoredCall[]>(callsPath, []);
+  const calls = await readStoredList<StoredCall>(callsKey, callsPath);
   calls.push(call);
-  await writeJsonFile(callsPath, calls);
+  await writeStoredList(callsKey, callsPath, calls);
   return call;
 }

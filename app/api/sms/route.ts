@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
     body,
     messageSid,
     direction: "inbound",
+    source: "twilio",
     timestamp: new Date().toISOString()
   });
 

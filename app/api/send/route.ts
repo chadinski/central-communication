@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       body: body.trim(),
       messageSid: message.sid,
       direction: "outbound",
+      source: "twilio",
       timestamp: new Date().toISOString()
     });
 
